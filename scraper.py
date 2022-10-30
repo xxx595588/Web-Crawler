@@ -1,13 +1,14 @@
+from importlib.resources import path
 import re
 import itertools
 import urllib.robotparser
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, urldefrag
 from bs4 import BeautifulSoup
 from http.client import responses
 from utils import get_logger
 
 
-stop_words_set = (['a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', "aren't", 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', "can't", 'cannot', 'could', "couldn't", 'did', "didn't", 'do', 'does', "doesn't", 'doing', "don't", 'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had', "hadn't", 'has', "hasn't", 'have', "haven't", 'having', 'he', "he'd", "he'll", "he's", 'her', 'here', "here's", 'hers', 'herself', 'him', 'himself', 'his', 'how', "how's", 'i', "i'd", "i'll", "i'm", "i've", 'if', 'in', 'into', 'is', "isn't", 'it', "it's", 'its', 'itself', "let's", 'me', 'more', 'most', "mustn't", 'my', 'myself', 'no', 'nor', 'not', 'of', 'off', 'on', 'once', 'only', 'or', 'other', 'ought', 'our', 'ours\tourselves', 'out', 'over', 'own', 'same', "shan't", 'she', "she'd", "she'll", "she's", 'should', "shouldn't", 'so', 'some', 'such', 'than', 'that', "that's", 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', "there's", 'these', 'they', "they'd", "they'll", "they're", "they've", 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was', "wasn't", 'we', "we'd", "we'll", "we're", "we've", 'were', "weren't", 'what', "what's", 'when', "when's", 'where', "where's", 'which', 'while', 'who', "who's", 'whom', 'why', "why's", 'with', "won't", 'would', "wouldn't", 'you', "you'd", "you'll", "you're", "you've", 'your', 'yours', 'yourself'])
+stop_words_set = (["a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't", "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't", "doing", "don't", "down", "during", "each", "few", "for", "from", "further", "had", "hadn't", "has", "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers", "herself", "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm", "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself", "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or", "other", "ought", "our", "ours", "ourselves", "out", "over", "own", "same", "shan't", "she", "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such", "than", "that", "that's", "the", "their", "theirs", "them", "themselves", "then", "there", "there's", "these", "they", "they'd", "they'll", "they're", "they've", "this", "those", "through", "to", "too", "under", "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were", "weren't", "what", "what's", "when", "when's", "where", "where's", "which", "while", "who", "who's", "whom", "why", "why's", "with", "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself"])
 
 # Store the visited url to prevent revisiting
 visited_url = set()
@@ -16,16 +17,16 @@ word_dict = {}
 longest_url = None
 long_url_words_count = 0
 sub_domain = {}
+exc_dup_dec = set()
 
 def sub_domain_check(url):
     parsed = urlparse(url)
-    url_domain = parsed.scheme + '://' + parsed.netloc
     
-    if re.search('ics.uci.edu', url):
-        if sub_domain.get(url_domain) == None:
-            sub_domain[url_domain] = 1
+    if parsed.netloc.find('.ics.uci.edu') > 0:
+        if sub_domain.get(parsed.netloc) == None:
+            sub_domain[parsed.netloc] = 1
         else:
-            sub_domain[url_domain] += 1
+            sub_domain[parsed.netloc] += 1
         
 
 def log_update():
@@ -35,7 +36,7 @@ def log_update():
     
     
     logger = get_logger('CRAWLER')
-    logger.info(f"Unique urls: {len(unique_url)}.\nTop 50 words are {top_50}.\nLongest page is {longest_url} with {long_url_words_count} words.\nNumber of ics.uci.edu subdomain: {len(sub_domain)}")
+    logger.info(f"Unique pages: {len(unique_url)}.\nTop 50 words are {top_50}.\nLongest page is {longest_url} with {long_url_words_count} words.\nNumber of ics.uci.edu subdomain: {len(sub_domain)}. List below: {sub_domain}\n\n")
     
 
 def word_counter(text):
@@ -47,8 +48,14 @@ def word_counter(text):
                 word_dict[word] += 1
                     
 
+# This function will extract the content of the page to string
 def extract_content(resp):
     global longest_url, long_url_words_count
+
+    #print(f"\n\nnow in {resp.raw_response.url}\n")
+
+    if resp.raw_response.content == None:
+        return []
 
     soup = BeautifulSoup(resp.raw_response.content, "html.parser")
     text = soup.get_text(" ", strip=True).lower().split()
@@ -83,18 +90,22 @@ def extract_content(resp):
     if len(new_text) > long_url_words_count:
         long_url_words_count = len(new_text)
         longest_url = resp.raw_response.url
-        
+ 
     return new_text
 
 
+"""
+Defrage the url, then check the domain name regardlee the scheme
+"""
 def unique_url_check(url):
     global unique_url
     
-    parsed = urlparse(url)
-    link = parsed.scheme + '://' + parsed.netloc
+    # defrage
+    parsed, frag = urldefrag(url)
     
-    if link not in unique_url:
-        unique_url.add(link)
+    # add to the set if domain name hasn't been seen
+    if parsed not in unique_url:
+        unique_url.add(parsed)
         
 
 # check for the trap in url
@@ -103,6 +114,16 @@ def safty_check(url):
     parsed = urlparse(url)
     
     if len(parsed.path) > 150:
+        return False
+
+    # find the repeat direction
+    path_element = parsed.path.split("/")
+    path_element.remove("")
+    if len(path_element) != len(set(path_element)):
+        return False
+        
+    # don't go to the calendar. E.g: https://wics.ics.uci.edu/events
+    if re.search(r"/events/|/events|/event/|/event", parsed.path):
         return False
 
     return True
@@ -120,25 +141,52 @@ def status_check(resp):
 
 
 def scraper(url, resp):
+
+    if not safty_check(url):
+        return list()
+
     
     global visited_url
     
     if url in visited_url:
         return list()
-    
-    visited_url.add(url)
-    unique_url_check(url)
+
+    # helper function to count the subdomain of "ics.uci.edu"
     sub_domain_check(url)
-    
+
+    visited_url.add(url)
+
+    # get the status of url
     if not status_check(resp):
         return list()
-    
+
+    # helper function to count the unique url in term of domain
+    unique_url_check(url)
+
+
+    # extract url content and count for each valid word
     text = extract_content(resp)
-    word_counter(text)
-        
-    valid_link = extract_next_links(url, resp)
+
+    hash_num = hash(frozenset(text))
+    # found the exact duplication, skip the url
+    if hash_num in exc_dup_dec:
+        return list()
+    else:
+        exc_dup_dec.add(hash_num)
+   
+    """
+    Only do the statistic when there're more than 50 words to adviod page without information
+    However, we still extract links from this page
+    """
+    if len(text) > 50:
+        word_counter(text)
+    
+    valid_link = extract_next_links(resp.raw_response.url, resp)
+
     
     log_update()
+
+    
     
     return valid_link
 
@@ -156,14 +204,49 @@ def extract_next_links(url, resp):
     
     # if status code is other than 200, print the erro and return an empty list
     
-        
+    #print(f"extracing from {url}")
+    
     soup = BeautifulSoup(resp.raw_response.content, "html.parser")
     links_per_page = set()
+    ori = urlparse(url)
 
+    # get all a tag with link
     for link in soup.find_all(lambda tag: tag.name=='a' and tag.get("href")):
-        if is_valid(link.get("href")) and link.get("href") not in links_per_page:
-            links_per_page.add(link.get("href"))
-            
+
+        mod_link = link.get("href")
+        # ignore the fragement
+        if mod_link[0] == "#":
+            continue
+
+        mod_parsed = urlparse(mod_link)
+
+
+        # convert relative url to absoulate url
+        if mod_parsed.scheme == "":
+        #print(f"before: {mod_link}")
+
+        
+            if ori.path == "":
+                mod_link = url + mod_link
+            else:
+                if ori.path [-1] == "/":
+                    #if mod_link[0] == "/":
+                    mod_link = urljoin(url, mod_link)
+                    #else:
+                        #mod_link = url + mod_link
+                elif ori.path [-1] != "/":
+                    mod_link = urljoin(url, mod_link)
+
+        #print(f"after: {mod_link}")
+
+        mod_parsed = urlparse(mod_link)
+
+        mod_link = mod_parsed.scheme + "://" + mod_parsed.netloc + mod_parsed.path
+
+
+        if is_valid(mod_link) and mod_link not in links_per_page:
+            links_per_page.add(mod_link)
+               
     return list(links_per_page)
  
 
@@ -199,7 +282,7 @@ def is_valid(url):
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz|ppsx|txt)$", parsed.path.lower()):
+            + r"|rm|smil|wmv|swf|wma|zip|rar|gz|ppsx|txt|pdf|php|odp|h|cc|py|ova|apk|m|tst|bat|nna|maf|xml|json|cpp|java)$", parsed.path.lower()):
             return False
             
         # Avoid revisiting the visited url
