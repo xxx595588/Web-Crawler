@@ -19,42 +19,49 @@ long_url_words_count = 0
 sub_domain = {}
 exc_dup_dec = set()
 
+# ------------------------ HELPER FUNCTIONS ------------------------
+
+# This funcation will check the given url is a subdomain of ics.uci.edu
 def sub_domain_check(url):
+    global sub_domain
     parsed = urlparse(url)
     
     if parsed.netloc.find('.ics.uci.edu') > 0:
-        if sub_domain.get(parsed.netloc) == None:
+        if sub_domain.get(parsed.netloc) is None:
             sub_domain[parsed.netloc] = 1
         else:
             sub_domain[parsed.netloc] += 1
         
-
-def log_update():
+# This function will keep updating for the cralwer
+def log_update(url):
     global unique_url, word_dict, longest_url, long_url_words_count, sub_domain
     word_dict = dict(sorted(word_dict.items(), key=lambda item: item[1], reverse=True))
     top_50 = dict(itertools.islice(word_dict.items(), 50))
     
-    
     logger = get_logger('CRAWLER')
+    logger.info(f"Current url: {url}\n")
     logger.info(f"Unique pages: {len(unique_url)}.\nTop 50 words are {top_50}.\nLongest page is {longest_url} with {long_url_words_count} words.\nNumber of ics.uci.edu subdomain: {len(sub_domain)}. List below: {sub_domain}\n\n")
     
-
+# This function the frequency of each word by given list
 def word_counter(text):
+    global word_dict
+
     for word in text:
         if word not in stop_words_set:
-            if word_dict.get(word) == None:
+            if word_dict.get(word) is None:
                 word_dict[word] = 1
             else:
                 word_dict[word] += 1
                     
 
-# This function will extract the content of the page to string
+# This function will extract the content from the page to a list of string
 def extract_content(resp):
     global longest_url, long_url_words_count
 
     #print(f"\n\nnow in {resp.raw_response.url}\n")
 
-    if resp.raw_response.content == None:
+    # Empty page, no content
+    if resp.raw_response is None:
         return []
 
     soup = BeautifulSoup(resp.raw_response.content, "html.parser")
@@ -62,45 +69,50 @@ def extract_content(resp):
     new_text = []
     
     for word in text:
+
+        # Extract words in (). E.g, (Hello) -> Hello
         if re.search(f"^[(]", word):
             if re.search(f"[)]$", word):
                 word = word[1: -1]
             else:
                 word = word[1:]
-                
+        
+        # Extract words in "". E.g, "Hello" -> Hello
         if re.search(f"^[“]", word):
             if re.search(f"[“]$", word):
                 word = word[1: -1]
             else:
                 word = word[1:]
         
+        # Extract words end wtih .):,“. E.g, Hello, -> Hello
         if re.search(f"[.):,“]$", word):
             word = word[:-1]
-            
+        
+        # Ignore words which is not alphbet. E.g, $2000 or 2000-02-12
         if re.search(r"[^a-z-’.]", word):
             continue
         else:
+            # Ignore single character
             if (len(word) == 1 and re.search(f"^[-@!#$%^&*()_+=`~<>,./?]", word)):
                 continue
+            # Empty String
             elif word == '':
                 continue
             else:
                 new_text.append(word)
     
+    # Counter for the valid words and update for the longest page in terms of number of word
     if len(new_text) > long_url_words_count:
         long_url_words_count = len(new_text)
         longest_url = resp.raw_response.url
  
     return new_text
 
-
-"""
-Defrage the url, then check the domain name regardlee the scheme
-"""
+# This function will check the uniquity of given url
 def unique_url_check(url):
     global unique_url
     
-    # defrage
+    # defrage the url
     parsed, frag = urldefrag(url)
     
     # add to the set if domain name hasn't been seen
@@ -108,26 +120,32 @@ def unique_url_check(url):
         unique_url.add(parsed)
         
 
-# check for the trap in url
+# This function will check the follwoing traps for the given url
+#   1. Long path url
+#   2. Repeating direction
+#   3. Events page
 def safty_check(url):
-
     parsed = urlparse(url)
-    
+
+    # 1. Long path url
     if len(parsed.path) > 150:
         return False
 
-    # find the repeat direction
+    # 2. Repeating direction
     path_element = parsed.path.split("/")
     path_element.remove("")
     if len(path_element) != len(set(path_element)):
         return False
-        
-    # don't go to the calendar. E.g: https://wics.ics.uci.edu/events
+
+    # 3. Event page
     if re.search(r"/events/|/events|/event/|/event", parsed.path):
         return False
 
     return True
     
+# This function will check the resp.status
+# Only retuen Ture when status code is 200
+# Otherwise, return False and print the error code
 def status_check(resp):
     if resp.status != 200:
         if(resp.status > 599):
@@ -139,19 +157,29 @@ def status_check(resp):
     else:
         return True
 
+# --------------------- END OF HELPER FUNCTIONS ---------------------
 
 def scraper(url, resp):
+
+    if resp.raw_response is None:
+        return list()
+
+    if resp.raw_response.headers.get("Content-Type") is None:
+        return list()
+
+    #print(f"url:{resp.url}\n status: {resp.status}\n response: {resp.raw_response.content}")
+
+    file_type = resp.raw_response.headers["Content-Type"].split(";")[0]
+    if file_type != "text/html":
+        return list()
 
     if not safty_check(url):
         return list()
 
-    
     global visited_url
-    
     if url in visited_url:
         return list()
 
-    # helper function to count the subdomain of "ics.uci.edu"
     sub_domain_check(url)
 
     visited_url.add(url)
@@ -160,36 +188,27 @@ def scraper(url, resp):
     if not status_check(resp):
         return list()
 
-    # helper function to count the unique url in term of domain
     unique_url_check(url)
 
-
-    # extract url content and count for each valid word
     text = extract_content(resp)
 
+    # found the duplication, skip the url
     hash_num = hash(frozenset(text))
-    # found the exact duplication, skip the url
     if hash_num in exc_dup_dec:
         return list()
     else:
         exc_dup_dec.add(hash_num)
    
-    """
-    Only do the statistic when there're more than 50 words to adviod page without information
-    However, we still extract links from this page
-    """
+    # Only do the statistic when there're more than 50 words to adviod page without information
+    # However, we still extract links from this page and add it to the unique link set
     if len(text) > 50:
         word_counter(text)
     
     valid_link = extract_next_links(resp.raw_response.url, resp)
 
-    
-    log_update()
+    log_update(url)
 
-    
-    
     return valid_link
-
 
 def extract_next_links(url, resp):
     # Implementation required.
@@ -212,20 +231,17 @@ def extract_next_links(url, resp):
 
     # get all a tag with link
     for link in soup.find_all(lambda tag: tag.name=='a' and tag.get("href")):
-
         mod_link = link.get("href")
-        # ignore the fragement
+
+        # ignore the fragement url
         if mod_link[0] == "#":
             continue
 
         mod_parsed = urlparse(mod_link)
 
-
         # convert relative url to absoulate url
         if mod_parsed.scheme == "":
         #print(f"before: {mod_link}")
-
-        
             if ori.path == "":
                 mod_link = url + mod_link
             else:
@@ -239,10 +255,9 @@ def extract_next_links(url, resp):
 
         #print(f"after: {mod_link}")
 
+        # reconstruct the absoluate url
         mod_parsed = urlparse(mod_link)
-
         mod_link = mod_parsed.scheme + "://" + mod_parsed.netloc + mod_parsed.path
-
 
         if is_valid(mod_link) and mod_link not in links_per_page:
             links_per_page.add(mod_link)
@@ -263,17 +278,22 @@ def is_valid(url):
             return False
         
         # if no domain name is presented
-        if parsed.hostname is None:
+        if parsed.netloc is None:
             return False
         
         # defragment the url
-        if parsed.fragment != '':
+        if parsed.fragment != "":
             return False
         
         # chech the domain
-        if not re.match(r".*\.(ics.uci.edu|cs.uci.edu|informatics.uci.edu|stat.uci.edu|today.uci.edu/department/information_computer_sciences)", parsed.hostname.lower()):
+        if not re.match(r".*\.(ics.uci.edu|cs.uci.edu|informatics.uci.edu|stat.uci.edu|today.uci.edu/department/information_computer_sciences)", parsed.netloc):
             return False
-            
+        
+        # Here is a rough check to filiter out by the end of path 
+        # Since we can list all the type, so we will check header in scraper function again
+        # Remove the path with ova & apk which are typically large and no infomation
+        # Advoid file like java, cpp, c, h, and json which are no valuable infomation in it
+        # Don't get the bat, nna,, maf, etc... (no valuable infomation)
         if re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"
@@ -282,14 +302,14 @@ def is_valid(url):
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz|ppsx|txt|pdf|php|odp|h|cc|py|ova|apk|m|tst|bat|nna|maf|xml|json|cpp|java)$", parsed.path.lower()):
+            + r"|rm|smil|wmv|swf|wma|zip|rar|gz"
+            + r"|ppsx|txt|pdf|php|odp|h|cc|py|ova|apk|m|tst|bat|nna|maf|xml|json|cpp|java)$", parsed.path.lower()):
             return False
             
         # Avoid revisiting the visited url
         if url in visited_url:
             return False
         
-            
     except TypeError:
         print ("TypeError for ", parsed)
         raise
