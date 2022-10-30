@@ -251,10 +251,7 @@ def extract_next_links(url, resp):
                 mod_link = url + mod_link
             else:
                 if ori.path [-1] == "/":
-                    #if mod_link[0] == "/":
                     mod_link = urljoin(url, mod_link)
-                    #else:
-                        #mod_link = url + mod_link
                 elif ori.path [-1] != "/":
                     mod_link = urljoin(url, mod_link)
 
