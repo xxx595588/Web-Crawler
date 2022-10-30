@@ -12,11 +12,21 @@ stop_words_set = (["a", "about", "above", "after", "again", "against", "all", "a
 
 # Store the visited url to prevent revisiting
 visited_url = set()
+
+# Set of unique url in terms of scheme://domain/path
 unique_url = set()
+
+# Dictionary of word. E.g, {word : frequency}
 word_dict = {}
+
+# Longest url and the number of word in the url
 longest_url = None
 long_url_words_count = 0
+
+# Dictionary of subdomain of "ics.uci.edu". E.g, {domain : frequency}
 sub_domain = {}
+
+# Set of the hash value per page to advoid crawling same page with distinct url
 exc_dup_dec = set()
 
 # ------------------------ HELPER FUNCTIONS ------------------------
@@ -221,10 +231,6 @@ def extract_next_links(url, resp):
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
     
-    # if status code is other than 200, print the erro and return an empty list
-    
-    #print(f"extracing from {url}")
-    
     soup = BeautifulSoup(resp.raw_response.content, "html.parser")
     links_per_page = set()
     ori = urlparse(url)
@@ -241,7 +247,6 @@ def extract_next_links(url, resp):
 
         # convert relative url to absoulate url
         if mod_parsed.scheme == "":
-        #print(f"before: {mod_link}")
             if ori.path == "":
                 mod_link = url + mod_link
             else:
@@ -252,8 +257,6 @@ def extract_next_links(url, resp):
                         #mod_link = url + mod_link
                 elif ori.path [-1] != "/":
                     mod_link = urljoin(url, mod_link)
-
-        #print(f"after: {mod_link}")
 
         # reconstruct the absoluate url
         mod_parsed = urlparse(mod_link)
@@ -289,8 +292,8 @@ def is_valid(url):
         if not re.match(r".*\.(ics.uci.edu|cs.uci.edu|informatics.uci.edu|stat.uci.edu|today.uci.edu/department/information_computer_sciences)", parsed.netloc):
             return False
         
-        # Here is a rough check to filiter out by the end of path 
-        # Since we can list all the type, so we will check header in scraper function again
+        # Here is a rough check to filiter out by the end of path
+        # Since we can't list all types, so we will check header in scraper function later
         # Remove the path with ova & apk which are typically large and no infomation
         # Advoid file like java, cpp, c, h, and json which are no valuable infomation in it
         # Don't get the bat, nna,, maf, etc... (no valuable infomation)
