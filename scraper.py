@@ -46,11 +46,11 @@ def sub_domain_check(url):
 def log_update(url):
     global unique_url, word_dict, longest_url, long_url_words_count, sub_domain
     word_dict = dict(sorted(word_dict.items(), key=lambda item: item[1], reverse=True))
-    top_50 = dict(itertools.islice(word_dict.items(), 50))
+    top_100 = dict(itertools.islice(word_dict.items(), 100))
     
     logger = get_logger('CRAWLER')
     logger.info(f"Current url: {url}\n")
-    logger.info(f"Unique pages: {len(unique_url)}.\nTop 50 words are {top_50}.\nLongest page is {longest_url} with {long_url_words_count} words.\nNumber of ics.uci.edu subdomain: {len(sub_domain)}. List below: {sub_domain}\n\n")
+    logger.info(f"Unique pages: {len(unique_url)}.\nTop 50 words are {top_100}.\nLongest page is {longest_url} with {long_url_words_count} words.\nNumber of ics.uci.edu subdomain: {len(sub_domain)}. List below: {sub_domain}\n\n")
     
 # This function the frequency of each word by given list
 def word_counter(text):
