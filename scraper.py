@@ -8,7 +8,18 @@ from http.client import responses
 from utils import get_logger
 from nltk.tokenize import word_tokenize
 
-stop_words_set = (["a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't", "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't", "doing", "don't", "down", "during", "each", "few", "for", "from", "further", "had", "hadn't", "has", "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers", "herself", "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm", "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself", "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or", "other", "ought", "our", "ours", "ourselves", "out", "over", "own", "same", "shan't", "she", "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such", "than", "that", "that's", "the", "their", "theirs", "them", "themselves", "then", "there", "there's", "these", "they", "they'd", "they'll", "they're", "they've", "this", "those", "through", "to", "too", "under", "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were", "weren't", "what", "what's", "when", "when's", "where", "where's", "which", "while", "who", "who's", "whom", "why", "why's", "with", "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself"])
+stop_words_set = (["a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't", "as", "at", 
+                    "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "can't", "cannot", "could", 
+                    "couldn't", "did", "didn't", "do", "does", "doesn't", "doing", "don't", "down", "during", "each", "few", "for", "from", 
+                    "further", "had", "hadn't", "has", "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her", "here", 
+                    "here's", "hers", "herself", "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm", "i've", "if", "in", "into", 
+                    "is", "isn't", "it", "it's", "its", "itself", "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor", "not", 
+                    "of", "off", "on", "once", "only", "or", "other", "ought", "our", "ours", "ourselves", "out", "over", "own", "same", "shan't", 
+                    "she", "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such", "than", "that", "that's", "the", "their", 
+                    "theirs", "them", "themselves", "then", "there", "there's", "these", "they", "they'd", "they'll", "they're", "they've", "this", 
+                    "those", "through", "to", "too", "under", "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were", 
+                    "weren't", "what", "what's", "when", "when's", "where", "where's", "which", "while", "who", "who's", "whom", "why", "why's", "with", 
+                    "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself"])
 
 # Store the visited url to prevent revisiting
 visited_url = set()
@@ -27,7 +38,7 @@ long_url_words_count = 0
 sub_domain = {}
 
 # Set of the hash value per page to advoid crawling same page with distinct url
-exc_dup_dec = set()
+dup_dec = set()
 
 # ------------------------ HELPER FUNCTIONS ------------------------
 
@@ -50,9 +61,11 @@ def log_update(url):
     
     logger = get_logger('CRAWLER')
     logger.info(f"Current url: {url}\n")
-    logger.info(f"Unique pages: {len(unique_url)}.\nTop 50 words are {top_100}.\nLongest page is {longest_url} with {long_url_words_count} words.\nNumber of ics.uci.edu subdomain: {len(sub_domain)}. List below: {sub_domain}\n\n")
+    logger.info(f"Unique pages: {len(unique_url)}.\nTop 100 words are {top_100}.\n"
+                f"Longest page is {longest_url} with {long_url_words_count} words.\n"
+                f"Number of ics.uci.edu subdomain: {len(sub_domain)}. List below: {sub_domain}\n\n")
     
-# This function the frequency of each word by given list
+# This function will count the frequency of each word by given list
 def word_counter(text):
     global word_dict
 
@@ -68,7 +81,7 @@ def word_counter(text):
 def extract_content(resp):
     global longest_url, long_url_words_count
 
-    # Empty page, no content
+    # Empty page (with status code 200), no content
     if resp.raw_response is None:
         return []
 
@@ -87,7 +100,6 @@ def extract_content(resp):
         text.remove("")
 
     '''
-
     for word in text:
 
         # Extract words in (). E.g, (Hello) -> Hello
@@ -122,7 +134,7 @@ def extract_content(resp):
                 new_text.append(word)
                 '''
     
-    # Counter for the valid words and update for the longest page in terms of number of word
+    # Counter for the valid words and update for the longest page in terms of the number of word
     if len(text) > long_url_words_count:
         long_url_words_count = len(text)
         longest_url = resp.raw_response.url
@@ -133,7 +145,7 @@ def extract_content(resp):
 def unique_url_check(url):
     global unique_url
     
-    # defrage the url
+    # defrage the url if any
     parsed, frag = urldefrag(url)
     
     # add to the set if domain name hasn't been seen
@@ -174,9 +186,6 @@ def safty_check(url):
         return False
         
     # 6. Empty pages
-
-
-
     if parsed is None:
         return False
 
@@ -230,15 +239,17 @@ def scraper(url, resp):
 
     # found the duplication, skip the url
     hash_num = hash(frozenset(text))
-    if hash_num in exc_dup_dec:
+    if hash_num in dup_dec:
         return list()
     else:
-        exc_dup_dec.add(hash_num)
+        dup_dec.add(hash_num)
    
     # Only do the statistic when there're more than 50 words to adviod page without information
-    # However, we still extract links from this page and add it to the unique link set
     if len(text) > 50:
         word_counter(text)
+    # Do not extract any link from page without information, since it tends to be useless link
+    else:
+        return list()
     
     valid_link = extract_next_links(resp.raw_response.url, resp)
     log_update(url)
@@ -255,7 +266,6 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
-    
     soup = BeautifulSoup(resp.raw_response.content, "html.parser")
     links_per_page = set()
     ori = urlparse(url)
@@ -320,7 +330,7 @@ def is_valid(url):
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz"
+            + r"|rm|smil|wmv|swf|wma|zip|rar|gz|bw|gtf"
             + r"|ppsx|txt|pdf|php|odp|h|cc|py|ova|apk|m|tst|bat|nna|maf|xml|json|cpp|java)$", parsed.path.lower()):
             return False
             
