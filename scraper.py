@@ -46,11 +46,11 @@ def sub_domain_check(url):
 def log_update(url):
     global unique_url, word_dict, longest_url, long_url_words_count, sub_domain
     word_dict = dict(sorted(word_dict.items(), key=lambda item: item[1], reverse=True))
-    top_100 = dict(itertools.islice(word_dict.items(), 100))
+    top_50 = dict(itertools.islice(word_dict.items(), 50))
     
     logger = get_logger('CRAWLER')
     logger.info(f"Current url: {url}\n")
-    logger.info(f"Unique pages: {len(unique_url)}.\nTop 100 words are {top_100}.\nLongest page is {longest_url} with {long_url_words_count} words.\nNumber of ics.uci.edu subdomain: {len(sub_domain)}. List below: {sub_domain}\n\n")
+    logger.info(f"Unique pages: {len(unique_url)}.\nTop 50 words are {top_50}.\nLongest page is {longest_url} with {long_url_words_count} words.\nNumber of ics.uci.edu subdomain: {len(sub_domain)}. List below: {sub_domain}\n\n")
     
 # This function the frequency of each word by given list
 def word_counter(text):
@@ -72,7 +72,6 @@ def extract_content(resp):
     if resp.raw_response is None:
         return []
 
-    # tokenize from the web
     soup = BeautifulSoup(resp.raw_response.content, "html.parser")
     text = word_tokenize(soup.get_text())
     
@@ -120,7 +119,8 @@ def extract_content(resp):
                 continue
             else:
                 new_text.append(word)
-    '''
+                '''
+    
     # Counter for the valid words and update for the longest page in terms of number of word
     if len(text) > long_url_words_count:
         long_url_words_count = len(text)
@@ -144,6 +144,8 @@ def unique_url_check(url):
 #   1. Long path url
 #   2. Repeating direction
 #   3. Events page
+#   4. Calendar
+#   5. Empty
 def safty_check(url):
     parsed = urlparse(url)
 
@@ -157,16 +159,16 @@ def safty_check(url):
     if len(path_element) != len(set(path_element)):
         return False
 
-    # 3. Event pages
+    # 3. Event page
     if re.search(r"/events/|/events|/event/|/event", parsed.path):
         return False
-
-    # 4. Calendar pages
+        
+    # 4. Calendar page
     if re.search(r"/calendars/|/calendars|/calendar/|/calendar", parsed.path):
         return False
-
-    # 5. Genealogy pages
-    if re.search(r"/Family/|/Family|/Families/|/Families", parsed.path):
+        
+    # 5. Empty
+    if parsed is None:
         return False
 
     return True
@@ -177,7 +179,7 @@ def safty_check(url):
 def status_check(resp):
     if resp.status != 200:
         if(resp.status > 599):
-            print(f'Caching error {resp.status}: {resp.error}')
+            print(f"Caching error {resp.status}: {resp.error}")
         else:
             print(responses[resp.status])
             
@@ -188,13 +190,14 @@ def status_check(resp):
 # --------------------- END OF HELPER FUNCTIONS ---------------------
 
 def scraper(url, resp):
-
+    # non resp.raw_response is found, return
     if resp.raw_response is None:
         return list()
-
+    # if resp.raw_response doesn't have Content-Type, return
     if resp.raw_response.headers.get("Content-Type") is None:
         return list()
 
+    # only allow type of text/html
     file_type = resp.raw_response.headers["Content-Type"].split(";")[0]
     if file_type != "text/html":
         return list()
@@ -207,7 +210,6 @@ def scraper(url, resp):
         return list()
 
     sub_domain_check(url)
-
     visited_url.add(url)
 
     # get the status of url
@@ -215,7 +217,6 @@ def scraper(url, resp):
         return list()
 
     unique_url_check(url)
-
     text = extract_content(resp)
 
     # found the duplication, skip the url
@@ -226,13 +227,11 @@ def scraper(url, resp):
         exc_dup_dec.add(hash_num)
    
     # Only do the statistic when there're more than 50 words to adviod page without information
-    if len(text) > 100:
+    # However, we still extract links from this page and add it to the unique link set
+    if len(text) > 50:
         word_counter(text)
-    else:
-        return list()
     
     valid_link = extract_next_links(resp.raw_response.url, resp)
-
     log_update(url)
 
     return valid_link
@@ -264,7 +263,6 @@ def extract_next_links(url, resp):
 
         # convert relative url to absoulate url
         if mod_parsed.scheme == "":
-        #print(f"before: {mod_link}")
             if ori.path == "":
                 mod_link = url + mod_link
             else:
@@ -272,8 +270,6 @@ def extract_next_links(url, resp):
                     mod_link = urljoin(url, mod_link)
                 elif ori.path [-1] != "/":
                     mod_link = urljoin(url, mod_link)
-
-        #print(f"after: {mod_link}")
 
         # reconstruct the absoluate url
         mod_parsed = urlparse(mod_link)
@@ -286,9 +282,6 @@ def extract_next_links(url, resp):
  
 
 def is_valid(url):
-    # Decide whether to crawl this url or not. 
-    # If you decide to crawl it, return True; otherwise return False.
-    # There are already some conditions that return False.
     try:
         parsed = urlparse(url)
         
@@ -308,8 +301,8 @@ def is_valid(url):
         if not re.match(r".*\.(ics.uci.edu|cs.uci.edu|informatics.uci.edu|stat.uci.edu|today.uci.edu/department/information_computer_sciences)", parsed.netloc):
             return False
         
-        # Here is a rough check to filiter out by the end of path 
-        # Since we can list all the type, so we will check header in scraper function again
+        # Here is a rough check to filiter out by the end of path
+        # Since we can't list all types, so we will check header in scraper function later
         # Remove the path with ova & apk which are typically large and no infomation
         # Advoid file like java, cpp, c, h, and json which are no valuable infomation in it
         # Don't get the bat, nna,, maf, etc... (no valuable infomation)
