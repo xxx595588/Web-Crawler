@@ -72,6 +72,7 @@ def extract_content(resp):
     if resp.raw_response is None:
         return []
 
+    # tokenize from the web
     soup = BeautifulSoup(resp.raw_response.content, "html.parser")
     text = word_tokenize(soup.get_text())
     
@@ -143,9 +144,10 @@ def unique_url_check(url):
 # This function will check the follwoing traps for the given url
 #   1. Long path url
 #   2. Repeating direction
-#   3. Events page
-#   4. Calendar
-#   5. Empty
+#   3. Events pages
+#   4. Calendar pages
+#   5. Genealogy pagess
+#   6. Empty pages
 def safty_check(url):
     parsed = urlparse(url)
 
@@ -159,15 +161,22 @@ def safty_check(url):
     if len(path_element) != len(set(path_element)):
         return False
 
-    # 3. Event page
+    # 3. Event pages
     if re.search(r"/events/|/events|/event/|/event", parsed.path):
         return False
         
-    # 4. Calendar page
+    # 4. Calendar pages
     if re.search(r"/calendars/|/calendars|/calendar/|/calendar", parsed.path):
         return False
+
+    # 5. Genealogy pages
+    if re.search(r"/Family/|/Family|/Families/|/Families", parsed.path):
+        return False
         
-    # 5. Empty
+    # 6. Empty pages
+
+
+
     if parsed is None:
         return False
 
@@ -266,10 +275,7 @@ def extract_next_links(url, resp):
             if ori.path == "":
                 mod_link = url + mod_link
             else:
-                if ori.path [-1] == "/":
-                    mod_link = urljoin(url, mod_link)
-                elif ori.path [-1] != "/":
-                    mod_link = urljoin(url, mod_link)
+                mod_link = urljoin(url, mod_link)
 
         # reconstruct the absoluate url
         mod_parsed = urlparse(mod_link)
