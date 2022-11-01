@@ -91,48 +91,15 @@ def extract_content(resp):
     
     # remove anything which is not alphabet
     for i in range(len(text)):
-        text[i] = re.sub(r'[^a-z]', '',text[i])
+
+        text[i] = re.sub(r'[^a-zA-Z]', '',text[i])
+        text[i] = text[i].lower()
 
         if len(text[i]) == 1:
             text[i] = ""
     # remove empty string
     while "" in text:
         text.remove("")
-
-    '''
-    for word in text:
-
-        # Extract words in (). E.g, (Hello) -> Hello
-        if re.search(f"^[(]", word):
-            if re.search(f"[)]$", word):
-                word = word[1: -1]
-            else:
-                word = word[1:]
-        
-        # Extract words in "". E.g, "Hello" -> Hello
-        if re.search(f"^[“]", word):
-            if re.search(f"[“]$", word):
-                word = word[1: -1]
-            else:
-                word = word[1:]
-        
-        # Extract words end wtih .):,“. E.g, Hello, -> Hello
-        if re.search(f"[.):,“]$", word):
-            word = word[:-1]
-        
-        # Ignore words which is not alphbet. E.g, $2000 or 2000-02-12
-        if re.search(r"[^a-z-’.]", word):
-            continue
-        else:
-            # Ignore single character
-            if (len(word) == 1 and re.search(f"^[-@!#$%^&*()_+=`~<>,./?]", word)):
-                continue
-            # Empty String
-            elif word == '':
-                continue
-            else:
-                new_text.append(word)
-                '''
     
     # Counter for the valid words and update for the longest page in terms of the number of word
     if len(text) > long_url_words_count:
@@ -152,7 +119,6 @@ def unique_url_check(url):
     if parsed not in unique_url:
         unique_url.add(parsed)
         
-
 # This function will check the follwoing traps for the given url
 #   1. Long path url
 #   2. Repeating direction
@@ -296,7 +262,6 @@ def extract_next_links(url, resp):
                
     return list(links_per_page)
  
-
 def is_valid(url):
     try:
         parsed = urlparse(url)
